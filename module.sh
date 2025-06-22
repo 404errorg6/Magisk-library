@@ -38,6 +38,7 @@ modules=(
   "LSPosed|https://api.github.com/repos/LSPosed/LSPosed/releases/latest"
   "Zygisk Next|https://api.github.com/repos/Dr-TSNG/ZygiskNext/releases/latest"
   "PlayIntegrityFix|https://api.github.com/repos/chiteroman/PlayIntegrityFix/releases/latest"
+  "ViPER4Android|https://api.github.com/repos/AndroidAudioMods/ViPER4Android/releases/latest"
 )
 
 download_module() {
@@ -55,24 +56,40 @@ download_module() {
 
   echo "Fetching latest release info for $name..."
 
-  # Try to find arch-specific zip file first
-  asset_url=$(curl -s "$api_url" | grep browser_download_url | grep '.zip' | grep -i "$arch_keyword" | cut -d '"' -f 4 | head -n1)
+  # Fetch release JSON once
+  release_json=$(curl -s "$api_url")
 
-  # If no match, fallback to first .zip
+  # Try to find arch-specific zip file first
+  asset_url=$(echo "$release_json" | grep browser_download_url | grep '.zip' | grep -i "$arch_keyword" | cut -d '"' -f 4 | head -n1)
+
+  # If no match, fallback to any .zip
   if [[ -z "$asset_url" ]]; then
-    asset_url=$(curl -s "$api_url" | grep browser_download_url | grep '.zip' | cut -d '"' -f 4 | head -n1)
+    asset_url=$(echo "$release_json" | grep browser_download_url | grep '.zip' | cut -d '"' -f 4 | head -n1)
   fi
 
   if [[ -z "$asset_url" ]]; then
     echo "No .zip file found for $name"
-    return
+  else
+    filename=$(basename "$asset_url")
+    echo "Downloading $filename..."
+    curl -L -# -o "$dest/$filename" "$asset_url"
+    echo "Downloaded to $dest/$filename"
+    echo
   fi
 
-  filename=$(basename "$asset_url")
-  echo "Downloading $filename..."
-  curl -L -# -o "$dest/$filename" "$asset_url"
-  echo "Downloaded to $dest/$filename"
-  echo
+  # Special case: ViPER4Android needs APK as well
+  if [[ "$name" == "ViPER4Android" ]]; then
+    apk_url=$(echo "$release_json" | grep browser_download_url | grep '.apk' | cut -d '"' -f 4 | head -n1)
+    if [[ -n "$apk_url" ]]; then
+      apk_file=$(basename "$apk_url")
+      echo "Downloading companion APK: $apk_file..."
+      curl -L -# -o "$dest/$apk_file" "$apk_url"
+      echo "Downloaded to $dest/$apk_file"
+    else
+      echo "No APK found for $name"
+    fi
+    echo
+  fi
 }
 
 # Loop and process each module
